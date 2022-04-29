@@ -18,7 +18,7 @@ QFontDatabase fontbase;
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    QApplication::setOverrideCursor(Qt::BlankCursor);//隐藏鼠标
+   // QApplication::setOverrideCursor(Qt::BlankCursor);//隐藏鼠标
     //UBUNTU
     // QTextCodec::setCodecForCStrings(QTextCodec::codecForLocale());
     // QTextCodec::setCodecForTr(QTextCodec::codecForName("utf8"));
@@ -30,20 +30,24 @@ int main(int argc, char *argv[])
     // //IMX6
     // int index = QFontDatabase::addApplicationFont("/opt/qt-4.8.-arm/lib/fonts/DroidSansFallback.ttf");
     // // int index = QFontDatabase::addApplicationFont("/opt/Fonts/DroidSansFallback.ttf");
-    // // int index = QFontDatabase::addApplicationFont("/opt/qt-4.8.-arm/lib/fonts/HYQiHei-65S.ttf");
-    // if(index != -1)
-    // {
-    //     QStringList fontList(QFontDatabase::applicationFontFamilies(index));
-    //     if(fontList.count() > 0)
-    //     {
-    //         qDebug() << "open ttf ok";
-    //         QFont font_zh(fontList.at(0));
-    //         font_zh.setBold(false);
-    //         a.setFont(font_zh);
-    //     }
-    // } else {
-    //    qDebug() << "open ttf err";
-    // }
+    int index = QFontDatabase::addApplicationFont("/opt/qt-4.8.-arm/lib/fonts/HYQiHei-65S.ttf");
+    if(index != -1)
+    {
+        QString family = QFontDatabase::applicationFontFamilies(index).at(0);
+        QFont roboto(family);
+        a.setFont(roboto);
+
+        //QStringList fontList(QFontDatabase::applicationFontFamilies(index));
+        // if(fontList.count() > 0)
+        // {
+        //     qDebug() << "open ttf ok";
+        //     QFont font_zh(fontList.at(0));
+        //     font_zh.setBold(false);
+        //     a.setFont(font_zh);
+        // }
+    } else {
+       qDebug() << "open ttf err";
+    }
 
     a.setFont(QFont("Droid Sans Fallback", 9));
     //遍历本地字库

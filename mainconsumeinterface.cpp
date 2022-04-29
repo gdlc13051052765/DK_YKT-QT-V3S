@@ -57,6 +57,7 @@ mainConsumeInterface::mainConsumeInterface(QWidget *parent) :
     pal.setColor(QPalette::Background, Qt::black); //设置背景黑色
     this->setAutoFillBackground(true);
     this->setPalette(pal);
+    this->setCursor(Qt::BlankCursor); //隐藏鼠标
 
  
     //配置数据库读取信息
@@ -256,6 +257,9 @@ mainConsumeInterface::mainConsumeInterface(QWidget *parent) :
     {
         qDebug()<<"Send_Status Response \n";  
     }
+    //插入交易记录测试
+    QString nameStr = "张三";
+    mSqliteClass.sqlite3_consume_insert_db(1,100,"2022-04-29","11223344",nameStr);
 }
 
 /*==================================================================================

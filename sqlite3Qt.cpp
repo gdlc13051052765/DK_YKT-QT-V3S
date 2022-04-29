@@ -1,6 +1,11 @@
 #include "sqlite3.h"
 #include "sqlite3QT.h"
 
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QtSql/QSqlRecord>
+
 //消费模式
 #define MONEY_CONSUME_MODE 0//计算模式
 #define AUTO_CONSUME_MODE 1//自动模式
@@ -11,6 +16,8 @@ char *configDbFile = "/root/ykt_config.db";
 //消费记录数据库
 //char *recordDbFile = "/home/meican/record.db";
 char *recordDbFile = "/root/record.db";
+//黑名单数据库
+char *blknumDbFile = "/root/blknum.db";
 
 static char *zErrMsg =NULL;
 static char **azResult=NULL; //二维数组存放结果
@@ -313,4 +320,229 @@ struct	consumeRecordSt Sqlite3QT::sqlite3_collection_consumemoney_db(int flag)
     //关闭数据库
     sqlite3_close_v2(recod_db);
     return RecordStr;
+}
+
+/*=======================================================================================
+* 函 数 名： sqlite3_consume_insert_db
+* 参    数： 
+* 功能描述:  插入消费记录搭配记录数据库
+* 返 回 值： 
+* 备    注： 
+* 作    者： lc
+* 创建时间： 2022-01-26 
+==========================================================================================*/
+int Sqlite3QT::sqlite3_consume_insert_db(int consumeMode,int CurrentConsumMoney, QString consumeTime, QString cardNumber, QString name)
+{
+	char tempdata[200];
+	int len,recordId,err;
+	char *buf;
+    sqlite3 *recod_db =NULL;
+	sqlite3_stmt *stmt = NULL; // 用来取数据的
+
+    recordId = 0;
+	/* 打开数据库 */
+	err = sqlite3_open_v2(recordDbFile, &recod_db, SQLITE_OPEN_READWRITE, NULL);
+    if( err ) {
+        qDebug()<< "Can't open database: "<< sqlite3_errmsg(recod_db);
+        sqlite3_close_v2(recod_db);
+        return err;
+    }
+	else 
+		qDebug()<< "You have opened a sqlite3 database named user successfully";
+    
+    //查找最后一条交易记录的id号
+    QString idSql = "select * from consume order by id desc limit 1";//查找最后一条交易记录的ID号
+    QByteArray ba=idSql.toLatin1();
+    char *sql0=ba.data();
+
+	if (sqlite3_prepare_v2(recod_db, sql0, -1, &stmt, NULL) == SQLITE_OK) 
+	{   
+		while(sqlite3_step(stmt) == SQLITE_ROW ) 
+		{	
+			// 取出第1列字段的值
+			recordId= sqlite3_column_int(stmt, 1);
+		}
+        qDebug()<< "最后一条交易记录 ID = " << recordId;
+	}
+	sqlite3_finalize(stmt);
+
+	/*插入数据	*/
+    recordId++;
+    QString str = "insert into consume values(";
+    str.append(QString::number(0));//采集标识
+    str.append(",");
+    str.append(QString::number(recordId));//交易记录ID
+    str.append(",");
+    str.append(QString::number(consumeMode));//消费模式
+    str.append(",");
+    str.append(QString::number(CurrentConsumMoney));//消费金额
+    str.append(",'");
+    str.append(consumeTime);//消费时间
+    str.append("','");
+    str.append(cardNumber);//消费卡号
+    str.append("','");
+    str.append(name);//用户姓名
+    str.append("')");
+    qDebug() << str;
+    ba=str.toLatin1();
+    char *sql=ba.data();
+
+	sqlite3_exec(recod_db,sql,NULL,NULL,&zErrMsg);
+	sqlite3_close(recod_db);
+}
+
+/*=======================================================================================
+* 函 数 名： sqlite3_blaknumber_query_db
+* 参    数： 卡号
+* 功能描述:  查询是否再黑名单数据库中
+* 返 回 值： 0==正常卡；1==黑名单卡
+* 备    注： 
+* 作    者： lc
+* 创建时间： 2022-04-26 
+==========================================================================================*/
+int Sqlite3QT::sqlite3_blaknumber_query_db(QString number)
+{
+	char tempdata[100],bufer[10];
+	int len;
+	char *buf;
+    const unsigned char *numberbak;
+	sqlite3_stmt *stmt = NULL; // 用来取数据的
+    sqlite3 *blknumber_db=NULL;//黑名单数据库句柄
+	memset(bufer,10,0);
+	memset(tempdata,100,0);
+
+	int ret =-1;
+	/* 打开数据库 */
+	len = sqlite3_open(blknumDbFile,&blknumber_db);
+	if( len )
+	{
+	   /*  fprintf函数格式化输出错误信息到指定的stderr文件流中  */
+	   qDebug() <<"Can't open database:"<<sqlite3_errmsg(blknumber_db);//sqlite3_errmsg(db)用以获得数据库打开错误码的英文描述。
+	   sqlite3_close(blknumber_db);
+	   return len;
+	  // exit(1);
+	}
+	else 
+		qDebug() <<"You have opened a sqlite3 database named user successfully!";
+
+    QString str = "select *from blknumber where number =";
+    str.append(number);
+    qDebug() <<str;
+    QByteArray ba=str.toLatin1();
+    char *sql=ba.data();
+	ret = -1;
+	if (sqlite3_prepare(blknumber_db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+		while (sqlite3_step(stmt) == SQLITE_ROW) {
+			numberbak = sqlite3_column_text(stmt, 1);
+            char *str1 = (char *)numberbak;
+	        QString str =  QString(QLatin1String(str1));
+            if(str.compare(number, Qt::CaseInsensitive))//不区分大小写
+            {
+                qDebug() <<"黑名单卡";
+                sqlite3_finalize(stmt);
+                sqlite3_close(blknumber_db);
+                return 1;
+            }
+		}
+	}
+    qDebug() <<"正常卡卡";
+    sqlite3_finalize(stmt);
+    sqlite3_close(blknumber_db);
+    return 0;
+}
+
+//插入黑名单数据库
+int Sqlite3QT::sqlite3_blaknumber_insert_db(QString number)
+{
+	char tempdata[200];
+	int len;
+	char *buf;
+	sqlite3_stmt *stmt = NULL; // 用来取数据的
+    sqlite3 *blknumber_db=NULL;//黑名单数据库句柄
+
+	if(sqlite3_blaknumber_query_db(number))//数据库中已经存在
+		return 0;
+
+	/* 打开数据库 */
+	len = sqlite3_open(blknumDbFile,&blknumber_db);
+	if( len )
+	{
+	  /*  fprintf函数格式化输出错误信息到指定的stderr文件流中  */
+	   qDebug() <<"Can't open database:"<<sqlite3_errmsg(blknumber_db);//sqlite3_errmsg(db)用以获得数据库打开错误码的英文描述。
+	   sqlite3_close(blknumber_db);
+	   return len;
+	  // exit(1);
+	}
+	else 
+		printf("You have opened a sqlite3 database named user successfully!\n");
+
+    QString str = "insert into blknumber values(";
+    str.append(number);
+    str.append(")");
+    QByteArray ba=str.toLatin1();
+    char *sql=ba.data();
+    qDebug() <<str;
+	sqlite3_exec(blknumber_db,sql,NULL,NULL,&zErrMsg);
+	sqlite3_close(blknumber_db);
+    return 0;
+}
+//删除黑名单从数据库
+int Sqlite3QT::sqlite3_blaknumber_del_db(QString number)
+{
+	char tempdata[200];
+	int len;
+	char *buf;
+	sqlite3_stmt *stmt = NULL; // 用来取数据的
+    sqlite3 *blknumber_db=NULL;//黑名单数据库句柄
+
+	/* 打开数据库 */
+	len = sqlite3_open(blknumDbFile,&blknumber_db);
+	if( len )
+	{
+	 /*  fprintf函数格式化输出错误信息到指定的stderr文件流中  */
+	   qDebug() <<"Can't open database:"<<sqlite3_errmsg(blknumber_db);//sqlite3_errmsg(db)用以获得数据库打开错误码的英文描述。
+	   sqlite3_close(blknumber_db);
+	   return len;
+	}
+	else 
+		printf("You have opened a sqlite3 database named user successfully!\n");
+
+    QString str = "delete from blknumber where number = ";
+    str.append(number);
+    str.append(")");
+    qDebug() <<str;
+    QByteArray ba=str.toLatin1();
+    char *sql=ba.data();
+
+	sqlite3_exec(blknumber_db,sql,NULL,NULL,&zErrMsg);
+	sqlite3_close(blknumber_db);
+}
+
+//清空黑名单数据库
+int Sqlite3QT::sqlite3_blaknumber_clr_db(void)
+{
+	char tempdata[200];
+	int len;
+	char *buf;
+	sqlite3_stmt *stmt = NULL; // 用来取数据的
+    sqlite3 *blknumber_db=NULL;//黑名单数据库句柄
+
+	/* 打开数据库 */
+	len = sqlite3_open("blknum.db",&blknumber_db);
+	if( len )
+	{
+	   /*  fprintf函数格式化输出错误信息到指定的stderr文件流中  */
+	   qDebug() <<"Can't open database:"<<sqlite3_errmsg(blknumber_db);//sqlite3_errmsg(db)用以获得数据库打开错误码的英文描述。
+	   sqlite3_close(blknumber_db);
+	   return len;
+	}
+	else 
+		printf("You have opened a sqlite3 database named user successfully!\n");
+
+    QString str = "delete from blknumber;";
+    qDebug() <<str;
+    QByteArray ba=str.toLatin1();
+    char *sql=ba.data();
+	sqlite3_exec(blknumber_db,sql,NULL,NULL,&zErrMsg);
+	sqlite3_close(blknumber_db);
 }

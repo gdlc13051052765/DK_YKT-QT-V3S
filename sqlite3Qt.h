@@ -68,6 +68,11 @@ class Sqlite3QT
         void Sqlite_update_consumne_mode(int mode,int money);//修改配置数据库消费模式
         struct	dayConsumeRecordSt sqlite3_consume_query_daymoney_db(QString daytime1, QString daytime2);//日消费记录查询
         struct	consumeRecordSt sqlite3_collection_consumemoney_db(int flag);//查询采集记录
+        int sqlite3_blaknumber_query_db(QString number);
+        int sqlite3_blaknumber_insert_db(QString number);
+        int sqlite3_blaknumber_del_db(QString number);
+        int sqlite3_blaknumber_clr_db(void);
+        int sqlite3_consume_insert_db(int consumeMode,int CurrentConsumMoney, QString consumeTime, QString cardNumber, QString name);
 };
 
 #endif // SQLITE3_H__
